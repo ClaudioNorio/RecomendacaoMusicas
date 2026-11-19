@@ -1,0 +1,81 @@
+1) Carga de dados
+LOAD CSV WITH Headers FROM 'file:///musicas.csv' AS row 
+CREATE  (:Musica { 
+   id: toInteger (row.sequencia), 
+   nome: row.nomemusica, 
+  duracao: row.duracao 
+}) 
+
+Carregar generos musicais
+MERGE (:Genero {tipo:’Rock’})
+MERGE (:Genero {tipo:’Jazz’})
+MERGE (:Genero {tipo:’Samba’})
+MERGE (:Genero {tipo:’Pop’})
+
+2) Criar relacionamentos
+MATCH (m:Musica {id: 1})
+MATCH (g:Genero {nome: 'Samba'})
+MERGE (m)-[:PERTENCE]→(g);
+
+Associar genero musical com compositor
+MATCH (g:Genero {tipo:'Rock'})
+MATCH (c:Compositor)
+WHERE c.id IN [1,2,3]
+MERGE (c)-[:TEM_AFINIDADE]->(g);
+
+Associar músicas com seus respectivos álbuns
+MATCH (m:Musica {id: 1}), (a:Album {nome: 'Metal Sem Fio'}) MERGE (m)-[:FAZ_PARTE]->(a);
+MATCH (m:Musica {id: 2}), (a:Album {nome: 'Metal Sem Fio'}) MERGE (m)-[:FAZ_PARTE]->(a);
+MATCH (m:Musica {id: 3}), (a:Album {nome: 'Metal Sem Fio'}) MERGE (m)-[:FAZ_PARTE]->(a);
+MATCH (m:Musica {id: 4}), (a:Album {nome: 'Metal Sem Fio'}) MERGE (m)-[:FAZ_PARTE]->(a);
+MATCH (m:Musica {id: 5}), (a:Album {nome: 'Metal Sem Fio'}) MERGE (m)-[:FAZ_PARTE]->(a);
+MATCH (m:Musica {id: 6}), (a:Album {nome: 'Metal Sem Fio'}) MERGE (m)-[:FAZ_PARTE]->(a);
+
+3) Procurar perfis para recomendar as músicas
+Critérios para achar perfis similares de pessoas: curtem o mesmo gênero, compram o mesmo álbum e seguem o mesmo cantor. 
+Escolhida uma pessoa aleatoriamente fazer recomendações de músicas para ela.
+Ao encontrar perfis similares desta pessoa, retirar as músicas em comum. Mostrar apenas 20 músicas de recomendação.
+MATCH (p)-[:CURTE]->(g:Genero)<-[:CURTE]-(outra)
+WITH collect(g) AS generos
+RETURN size(generos) AS generos_comuns 
+
+Outra opção (sem usar size)
+
+MATCH (p:Pessoa {nome:'Jean Oliveira'})
+MATCH (outra:Pessoa)
+WHERE p <> outra
+
+OPTIONAL MATCH (p)-[:CURTE]->(g:Genero)<-[:CURTE]-(outra)
+WITH p, outra, count(DISTINCT g) AS generos_comuns
+
+OPTIONAL MATCH (p)-[:COMPRA]->(a:Album)<-[:COMPRA]-(outra)
+WITH p, outra,
+     generos_comuns,
+     count(DISTINCT a) AS albuns_comuns
+
+OPTIONAL MATCH (p)-[:SEGUE]->(c:Cantor)<-[:SEGUE]-(outra)
+WITH p, outra,
+     generos_comuns,
+     albuns_comuns,
+     count(DISTINCT c) AS cantores_comuns
+
+WITH p,
+     outra,
+     generos_comuns + albuns_comuns + cantores_comuns AS score
+
+WHERE score > 0
+
+MATCH (outra)-[:OUVE]->(m:Musica)
+
+WHERE NOT EXISTS {
+    MATCH (p)-[:OUVE]->(m)
+}
+
+WITH m, outra, score
+
+RETURN
+m.nome AS musica_recomendada,
+sum(score) AS relevancia
+ORDER BY relevancia DESC, musica_recomendada
+LIMIT 20
+
